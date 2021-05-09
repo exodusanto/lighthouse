@@ -53,12 +53,18 @@ class SubscriptionRegistry
      */
     protected $subscriptions = [];
 
+    /**
+     * @var \GraphQL\Type\Definition\ObjectType|null
+     */
+    protected $subscriptionType;
+
     public function __construct(ContextSerializer $serializer, StoresSubscriptions $storage, SchemaBuilder $schemaBuilder, ConfigRepository $configRepository)
     {
         $this->serializer = $serializer;
         $this->storage = $storage;
         $this->schemaBuilder = $schemaBuilder;
         $this->configRepository = $configRepository;
+        $this->subscriptionType = $schemaBuilder->schema()->getSubscriptionType();
     }
 
     /**
@@ -78,7 +84,15 @@ class SubscriptionRegistry
      */
     public function has(string $key): bool
     {
-        return isset($this->subscriptions[$key]);
+        if (isset($this->subscriptions[$key])) {
+            return true;
+        }
+
+        if ($this->subscriptionType === null) {
+            return false;
+        }
+
+        return $this->subscriptionType->hasField($key);
     }
 
     /**
@@ -88,7 +102,11 @@ class SubscriptionRegistry
      */
     public function keys(): array
     {
-        return array_keys($this->subscriptions);
+        if ($this->subscriptionType === null) {
+            return [];
+        }
+
+        return $this->subscriptionType->getFieldNames();
     }
 
     /**
@@ -96,6 +114,12 @@ class SubscriptionRegistry
      */
     public function subscription(string $key): GraphQLSubscription
     {
+        if (isset($this->subscriptions[$key])) {
+            return $this->subscriptions[$key];
+        }
+
+        $this->subscriptionType->getField($key);
+
         return $this->subscriptions[$key];
     }
 
@@ -121,10 +145,6 @@ class SubscriptionRegistry
      */
     public function subscriptions(Subscriber $subscriber): Collection
     {
-        // A subscription can be fired without a request so we must make
-        // sure the schema has been generated.
-        $this->schemaBuilder->schema();
-
         return (new Collection($subscriber->query->definitions))
             ->filter(
                 Utils::instanceofMatcher(OperationDefinitionNode::class)
@@ -140,11 +160,11 @@ class SubscriptionRegistry
                     ->all();
             })
             ->map(function ($subscriptionField): GraphQLSubscription {
-                return Arr::get(
-                    $this->subscriptions,
-                    $subscriptionField,
-                    new NotFoundSubscription
-                );
+                if (!$this->has($subscriptionField)) {
+                    return new NotFoundSubscription;
+                }
+
+                return $this->subscription($subscriptionField);
             });
     }
 
