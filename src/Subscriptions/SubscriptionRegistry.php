@@ -5,7 +5,6 @@ namespace Nuwave\Lighthouse\Subscriptions;
 use GraphQL\Language\AST\FieldNode;
 use GraphQL\Language\AST\OperationDefinitionNode;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Nuwave\Lighthouse\Events\StartExecution;
 use Nuwave\Lighthouse\Exceptions\DefinitionException;
@@ -160,7 +159,7 @@ class SubscriptionRegistry
                     ->all();
             })
             ->map(function ($subscriptionField): GraphQLSubscription {
-                if (!$this->has($subscriptionField)) {
+                if (! $this->has($subscriptionField)) {
                     return new NotFoundSubscription;
                 }
 
